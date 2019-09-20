@@ -226,8 +226,7 @@ class BottleneckX(nn.Module):
 class ResNext(nn.Module):
 
     def __init__(self, block, layers, num_classes=1000, seg=False, elastic=False, se=False):
-        self.inplanes1 = 64
-        self.inplanes2 = 64
+        self.inplanes = 64
         self.cardinality = 32 # C/基数
         self.seg = seg # 分割
         # torch.nn.BatchNorm2d(num_features, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
@@ -235,42 +234,23 @@ class ResNext(nn.Module):
         #    eps：分母中添加的一个值，目的是为了计算的稳定性，默认为：1e-5
         #    momentum：一个用于运行过程中均值和方差的一个估计参数（我的理解是一个稳定系数，类似于SGD中的momentum的系数）
         #    affine：当设为true时，会给定可以学习的系数矩阵gamma和beta
-        self._norm1 = lambda planes, momentum=0.05 if seg else 0.1: torch.nn.BatchNorm2d(planes, momentum=momentum)
-        self._norm2 = lambda planes, momentum=0.05 if seg else 0.1: torch.nn.BatchNorm2d(planes, momentum=momentum)
+        self._norm = lambda planes, momentum=0.05 if seg else 0.1: torch.nn.BatchNorm2d(planes, momentum=momentum)
         super(ResNext, self).__init__()
         """ 网络参数的定义部分 """
-        self.conv1_1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False) # 7x7x64的卷积
-        self.conv1_2 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False) # 7x7x64的卷积
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False) # 7x7x64的卷积
+        self.bn1 = self._norm(64) # 正则化
+        self.relu = nn.ReLU(inplace=True)
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1) # 3x3的池化
 
-        self.bn1_1 = self._norm1(64) # 正则化
-        self.bn1_2 = self._norm2(64) # 正则化
-
-        self.relu_1 = nn.ReLU(inplace=True)
-        self.relu_2 = nn.ReLU(inplace=True)
-
-        self.maxpool_1 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1) # 3x3的池化
-        self.maxpool_2 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1) # 3x3的池化
-
-        block1,block2 = block,block
         # 例如: layers=[6, 8, 5, 3]; elastic=True
-        self.layer1_1 = self._make_layer1(block1, 64, layers[0], elastic=elastic, se=se) # 加入elastic结构
-        self.layer1_2 = self._make_layer2(block2, 64, layers[0], elastic=elastic, se=se) # 加入elastic结构
-
-        self.layer2_1 = self._make_layer1(block1, 128, layers[1], stride=2, elastic=elastic, se=se) # 加入elastic结构
-        self.layer2_2 = self._make_layer2(block2, 128, layers[1], stride=2, elastic=elastic, se=se) # 加入elastic结构
-
-        self.layer3_1 = self._make_layer1(block1, 256, layers[2], stride=2, elastic=elastic, se=se) # 加入elastic结构
-        self.layer3_2 = self._make_layer2(block2, 256, layers[2], stride=2, elastic=elastic, se=se) # 加入elastic结构
+        self.layer1 = self._make_layer(block, 64, layers[0], elastic=elastic, se=se) # 加入elastic结构
+        self.layer2 = self._make_layer(block, 128, layers[1], stride=2, elastic=elastic, se=se) # 加入elastic结构
+        self.layer3 = self._make_layer(block, 256, layers[2], stride=2, elastic=elastic, se=se) # 加入elastic结构
         # 非分割部分
-        self.layer4_1 = self._make_layer1(block1, 512, layers[3], stride=2, elastic=False, se=se) # 最后一部分没有使用elastic结构
-        self.layer4_2 = self._make_layer2(block2, 512, layers[3], stride=2, elastic=False, se=se) # 最后一部分没有使用elastic结构
-        self.avgpool1 = nn.AdaptiveAvgPool2d(1) # 全局平均池化
-        self.avgpool2 = nn.AdaptiveAvgPool2d(1) # 全局平均池化
-
-        self.fc1 = nn.Linear(512 * block1.expansion, num_classes[0]) # 全连接层
+        self.layer4 = self._make_layer(block, 512, layers[3], stride=2, elastic=False, se=se) # 最后一部分没有使用elastic结构
+        self.avgpool = nn.AdaptiveAvgPool2d(1) # 全局平均池化
+        self.fc1 = nn.Linear(512 * block.expansion, num_classes) # 全连接层
         init.normal_(self.fc1.weight, std=0.01) # 全连接层weight初始化
-        self.fc2 = nn.Linear(512 * block2.expansion, num_classes[1]) # 全连接层
-        init.normal_(self.fc2.weight, std=0.01) # 全连接层weight初始化
         for n, p in self.named_parameters():
            if n.split('.')[-1] == 'weight':
               if 'conv' in n:
@@ -284,40 +264,22 @@ class ResNext(nn.Module):
               elif n.split('.')[-1] == 'bias':
                  p.data.fill_(0)
 
-    def _make_layer1(self, block, planes, blocks, stride=1, elastic=False, se=False):
+    def _make_layer(self, block, planes, blocks, stride=1, elastic=False, se=False):
         downsample = None
-        if stride != 1 or self.inplanes1 != planes * block.expansion:
+        if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes1, planes * block.expansion,
+                nn.Conv2d(self.inplanes, planes * block.expansion,
                           kernel_size=1, stride=stride, bias=False),
-                self._norm1(planes * block.expansion),
+                self._norm(planes * block.expansion),
             )
 
         layers = list()
         # 该部分是将每个blocks的第一个residual结构保存在layers列表中
-        layers.append(block(self.inplanes1, planes, self.cardinality, stride, downsample=downsample, norm=self._norm1, elastic=elastic, se=se))
-        self.inplanes1 = planes * block.expansion
+        layers.append(block(self.inplanes, planes, self.cardinality, stride, downsample=downsample, norm=self._norm, elastic=elastic, se=se))
+        self.inplanes = planes * block.expansion
         # 该部分是将每个blocks的剩下residual 结构保存在layers列表中，这样就完成了一个blocks的构造
         for i in range(1, blocks):
-            layers.append(block(self.inplanes1, planes, self.cardinality, norm=self._norm1, elastic=elastic, se=se))
-        return nn.Sequential(*layers)
-
-    def _make_layer2(self, block, planes, blocks, stride=1, elastic=False, se=False):
-        downsample = None
-        if stride != 1 or self.inplanes2 != planes * block.expansion:
-            downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes2, planes * block.expansion,
-                          kernel_size=1, stride=stride, bias=False),
-                self._norm2(planes * block.expansion),
-            )
-
-        layers = list()
-        # 该部分是将每个blocks的第一个residual结构保存在layers列表中
-        layers.append(block(self.inplanes2, planes, self.cardinality, stride, downsample=downsample, norm=self._norm2, elastic=elastic, se=se))
-        self.inplanes2 = planes * block.expansion
-        # 该部分是将每个blocks的剩下residual 结构保存在layers列表中，这样就完成了一个blocks的构造
-        for i in range(1, blocks):
-            layers.append(block(self.inplanes2, planes, self.cardinality, norm=self._norm2, elastic=elastic, se=se))
+            layers.append(block(self.inplanes, planes, self.cardinality, norm=self._norm, elastic=elastic, se=se))
         return nn.Sequential(*layers)
 
     # 分割部分的函数
@@ -338,41 +300,21 @@ class ResNext(nn.Module):
     def forward(self, x):
         size = (x.shape[2], x.shape[3]) # 图像的尺寸
         """ con1部分 """
-        x1 = self.conv1_1(x)
-        x2 = self.conv1_2(x)
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
 
-        x1 = self.bn1_1(x1)
-        x2 = self.bn1_2(x2)
-
-        x1 = self.relu_1(x1)
-        x2 = self.relu_2(x2)
-
-        x1 = self.maxpool_1(x1)
-        x2 = self.maxpool_2(x2)
-
-        # 非分割部分
-        x1 = self.layer1_1(x1) # 有elastic结构
-        x2 = self.layer1_2(x2) # 有elastic结构
-
-        x1 = self.layer2_1(x1) # 有elastic结构
-        x2 = self.layer2_2(x2) # 有elastic结构
-
-        x1 = self.layer3_1(x1) # 有elastic结构
-        x2 = self.layer3_2(x2) # 有elastic结构
-
-        x1 = self.layer4_1(x1) # 没有elastic结构
-        x2 = self.layer4_2(x2) # 没有elastic结构
-
-        x1 = self.avgpool1(x1)
-        x2 = self.avgpool2(x2)
-
-        x1 = x1.view(x1.size(0), -1)
-        x2 = x2.view(x2.size(0), -1)
+        x = self.layer1(x) # 有elastic结构
+        x = self.layer2(x) # 有elastic结构
+        x = self.layer3(x) # 有elastic结构
+        x = self.layer4(x) # 没有elastic结构
+        x = self.avgpool(x)
+        x = x.view(x.size(0), -1)
         # 全连接部分
-        out1 = self.fc1(x1) # 类别1
-        out2 = self.fc2(x2) # 类别2
+        out = self.fc1(x) # 类别1
 
-        return out1, out2
+        return out
 
 
 def resnext50(seg=False, **kwargs): # 普通的resnext50结构
