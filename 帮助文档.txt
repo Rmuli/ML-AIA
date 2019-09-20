@@ -1,0 +1,188 @@
+import torch
+print(torch.__version__)  
+
+from tensorboard import version
+print(version.VERSION)
+
+中文
+# -*- coding: utf-8 -*-
+
+资源监视
+watch -n 0.1 nvidia-smi
+
+
+预训练模型下载：
+for a in resnext50 resnext50_elastic resnext101 resnext101_elastic dla60x dla60x_elastic densenet201 densenet201_elastic; do
+   wget http://ai2-vision.s3.amazonaws.com/elastic/coco_models/coco_"$a".pth.tar
+done
+
+wget http://ai2-vision.s3.amazonaws.com/elastic/coco_models/coco_resnext50.pth.tar
+
+wget http://ai2-vision.s3.amazonaws.com/elastic/coco_models/coco_resnext50_elastic.pth.tar
+
+
+
+wget http://ai2-vision.s3.amazonaws.com/elastic/imagenet_models/resnext50_elastic.pth.tar
+
+
+
+
+在MSCOCO上从零开始训练：
+python multilabel_classify.py \
+--resume 2-ImageNet_pre-trained-model/resnext50_elastic.pth.tar \
+--epochs 1  --batch_size 16
+
+
+
+测试：
+对于：resnext50_elastic
+python multilabel_classify.py  --resume 1-coco_pre-trained-model_author/coco_resnext50_elastic.pth.tar --evaluate
+
+
+对于：coco_resnext50
+python multilabel_classify.py  --arch resnext50  --resume 1-coco_pre-trained-model_author/coco_resnext50.pth.tar --evaluate
+
+自己训练：
+python multilabel_classify.py  --resume 3-MSCOCO--model-train-demo/coco_resnext50_elastic_checkpoint.pth.tar --evaluate
+
+
+
+####################################################################
+多任务：
+python multilabel_classify.py \
+--resume 2-ImageNet_pre-trained-model/resnext50_elastic.pth.tar \
+--epochs 1  --batch_size 4
+
+
+原Elastic参数量：
+Parameters: 23.361424
+GFLOPs 4.306167808
+
+
+参数量很大：
+Parameters: 102.791184
+GFLOPs 21.71332608
+
+************************************************************************
+
+* 服饰数据集
+--没有elastic结构
+python multilabel_classify_clothes.py \
+--resume 2-ImageNet_pre-trained-model/resnext50.pth.tar \
+--arch resnext50 --epochs 30  --batch_size 4
+
+
+python multilabel_classify_clothes.py \
+--resume 2-ImageNet_pre-trained-model/resnext50_elastic.pth.tar \
+--epochs 30  --batch_size 4
+
+****************************************
+* 全连接层分离
+--没有elastic结构
+python multilabel_classify_clothes_fc_split.py \
+--resume 2-ImageNet_pre-trained-model/resnext50.pth.tar \
+--arch resnext50 --epochs 30 --batch_size 4 
+
+python multilabel_classify_clothes_fc_split.py \
+--resume 2-ImageNet_pre-trained-model/resnext50_elastic.pth.tar \
+--epochs 30  --batch_size 4 
+
+****************************************
+
+* conv5层分离
+--没有elastic结构
+python multilabel_classify_clothes_conv5_split.py \
+--resume 2-ImageNet_pre-trained-model/resnext50.pth.tar \
+--arch resnext50 --epochs 30  --batch_size 4
+
+python multilabel_classify_clothes_conv5_split.py \
+--resume 2-ImageNet_pre-trained-model/resnext50_elastic.pth.tar \
+--epochs 30  --batch_size 4
+
+****************************************
+* conv4层分离
+--没有elastic结构
+python multilabel_classify_clothes_conv4_split.py \
+--resume 2-ImageNet_pre-trained-model/resnext50.pth.tar \
+--arch resnext50 --epochs 30  --batch_size 4
+
+python multilabel_classify_clothes_conv4_split.py \
+--resume 2-ImageNet_pre-trained-model/resnext50_elastic.pth.tar \
+--epochs 30  --batch_size 4
+
+
+****************************************
+* conv3层分离--没有elastic结构
+python multilabel_classify_clothes_conv3_split.py \
+--resume 2-ImageNet_pre-trained-model/resnext50.pth.tar \
+--arch resnext50 --epochs 30  --batch_size 4
+
+* conv3层分离
+python multilabel_classify_clothes_conv3_split.py \
+--resume 2-ImageNet_pre-trained-model/resnext50_elastic.pth.tar \
+--epochs 30  --batch_size 4
+
+
+
+
+
+* conv2层分离
+--没有elastic结构
+python multilabel_classify_clothes_conv2_split.py \
+--resume 2-ImageNet_pre-trained-model/resnext50.pth.tar \
+--arch resnext50 --epochs 30  --batch_size 4
+
+
+python multilabel_classify_clothes_conv2_split.py \
+--resume 2-ImageNet_pre-trained-model/resnext50_elastic.pth.tar \
+--epochs 30  --batch_size 4
+
+
+* conv1层分离
+--没有elastic结构
+本体
+python multilabel_classify_clothes_conv1_ont_split.py \
+--resume 2-ImageNet_pre-trained-model/resnext50.pth.tar \
+--arch resnext50 --epochs 30  --batch_size 4
+
+
+python multilabel_classify_clothes_conv1_ont_split.py \
+--resume 2-ImageNet_pre-trained-model/resnext50_elastic.pth.tar \
+--epochs 30  --batch_size 4
+
+
+隐义
+--没有elastic结构
+python multilabel_classify_clothes_conv1_sem_split.py \
+--resume 2-ImageNet_pre-trained-model/resnext50.pth.tar \
+--arch resnext50 --epochs 30  --batch_size 4
+
+
+python multilabel_classify_clothes_conv1_sem_split.py \
+--resume 2-ImageNet_pre-trained-model/resnext50_elastic.pth.tar \
+--epochs 30  --batch_size 4
+
+
+
+
+===========================================================================================
+top-3
+
+python multilabel_classify_clothes_top3.py \
+--resume 2-ImageNet_pre-trained-model/resnext50_elastic.pth.tar \
+--epochs 30  --batch_size 4
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
