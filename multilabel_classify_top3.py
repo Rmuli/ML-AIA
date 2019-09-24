@@ -387,7 +387,9 @@ def train_multi(train_loader, model, criterion, optimizer, epoch, iteration_size
         # greater than（大于）
 #        pred = output.data.gt(0.0).long()  #  list里面，大于0的值为1,小于0的为0
 #        print("pred: ", pred)
-
+        # 计算mAP
+        pred_mAP = output.data.gt(0.0).long()
+        mAP = calculate_mAP(target, pred_mAP)
         # top3: 前3名的概率设置为1, 其余为0
         no_examples = target.shape[0] # 获得样本数 ——> batch_size的大小
         output=output.cpu().detach().numpy()
@@ -450,8 +452,8 @@ def train_multi(train_loader, model, criterion, optimizer, epoch, iteration_size
                   'Recall {rec.val:.2f} ({rec.avg:.2f})'.format(
                    epoch+1, i, len(train_loader), batch_time=batch_time,
                    data_time=data_time, loss=losses, prec=prec, rec=rec))
-            print('P_C {:.2f} R_C {:.2f} F_C {:.2f} \t P_O {:.2f} R_O {:.2f} F_O {:.2f} '
-                  .format(mean_p_c, mean_r_c, mean_f_c, p_o, r_o, f_o))
+            print('P_C {:.2f} R_C {:.2f} F_C {:.2f} \t P_O {:.2f} R_O {:.2f} F_O {:.2f} \t mAP {:.2f} '
+                  .format(mean_p_c, mean_r_c, mean_f_c, p_o, r_o, f_o, mAP))
             print()
 
 
@@ -481,6 +483,9 @@ def validate_multi(val_loader, model, criterion):
 
         # measure accuracy and record loss
 #        pred = output.data.gt(0.0).long() # 类型转换
+
+        pred_mAP = output.data.gt(0.0).long()
+        mAP = calculate_mAP(target, pred_mAP)
 
         no_examples = target.shape[0] # 获得样本数 ——> batch_size的大小
         output=output.cpu().detach().numpy()
@@ -540,14 +545,14 @@ def validate_multi(val_loader, model, criterion):
                   'Recall {rec.val:.2f} ({rec.avg:.2f})'.format(
                    i, len(val_loader), batch_time=batch_time, loss=losses,
                    prec=prec, rec=rec))
-            print('P_C {:.2f} R_C {:.2f} F_C {:.2f} \t P_O {:.2f} R_O {:.2f} F_O {:.2f}'
-                  .format(mean_p_c, mean_r_c, mean_f_c, p_o, r_o, f_o))
+            print('P_C {:.2f} R_C {:.2f} F_C {:.2f} \t P_O {:.2f} R_O {:.2f} F_O {:.2f} \t mAP {:.2f}'
+                  .format(mean_p_c, mean_r_c, mean_f_c, p_o, r_o, f_o, mAP))
             print()
 
     print('--------------------------------------------------------------------')
     print("验证集的最终结果为：")
-    print(' * P_C {:.2f} R_C {:.2f} F_C {:.2f} \t P_O {:.2f} R_O {:.2f} F_O {:.2f}'
-          .format(mean_p_c, mean_r_c, mean_f_c, p_o, r_o, f_o))
+    print(' * P_C {:.2f} R_C {:.2f} F_C {:.2f} \t P_O {:.2f} R_O {:.2f} F_O {:.2f} \t mAP {:.2f}'
+          .format(mean_p_c, mean_r_c, mean_f_c, p_o, r_o, f_o, mAP))
     return
 
 
@@ -567,6 +572,29 @@ def coco_adjust_learning_rate(optimizer, epoch):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
+
+def calculate_mAP(y_true, y_pred):
+    """
+    function to calculate C-MAP(mAP) and E-MAP
+    y_true: 0 1
+    """
+    y_true=y_true.cpu().detach().numpy()
+    y_pred = y_pred.cpu().detach().numpy()
+
+    nTest = y_true.shape[0]
+    nLabel = y_true.shape[1]
+    ap = np.zeros(nLabel)
+    for i in range(0,nLabel):
+        R = np.sum(y_true[:,i])
+        for j in range(0,nTest):
+            if y_true[j,i]==1:
+                r = np.sum(y_pred[:,i] >= y_pred[j,i])
+                rb = np.sum(y_pred[np.nonzero(y_true[:,i]),i] >= y_pred[j,i])
+                ap[i] = ap[i] + rb/(r*1.0)
+        ap[i] = ap[i]/R
+    cmap = np.nanmean(ap)
+
+    return cmap
 
 
 if __name__ == '__main__':
