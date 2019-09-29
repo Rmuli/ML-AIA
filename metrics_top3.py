@@ -8,10 +8,11 @@ from sklearn.metrics import average_precision_score
 
 # 得到的全是top-3的结果
 def calculate_metrics(labels, preds):
-    mAP = compute_mAP(labels, preds)
+    mAP1 = calculate_mAP(labels, preds)
+    mAP2 = compute_mAP(labels, preds)
     pc_top3, rc_top3, f1c_top3, po_top3, ro_top3, f1o_top3 = calculate_top3_metrics(labels, preds)
 
-    return pc_top3, rc_top3,f1c_top3, po_top3, ro_top3, f1o_top3, mAP
+    return pc_top3, rc_top3,f1c_top3, po_top3, ro_top3, f1o_top3, mAP1, mAP2
 
 # CP CR CF1 OP OR OF1  mAP  在top-3排序的标签
 def calculate_top3_metrics(labels, preds):
